@@ -2,6 +2,22 @@
 
 A high-performance command-line tool for displaying images, videos, and GIFs directly in your terminal using sixel graphics. Built with Rust for cross-platform compatibility and optimal performance.
 
+## Quick Start
+
+### For Windows Users (Pre-built Binary)
+
+1. Download the latest release: [wimg-windows-x64.zip](https://github.com/life2harsh/wimg/releases)
+2. Extract the ZIP file
+3. Run `install-user.bat` (or `install.bat` as administrator)
+4. Restart your terminal
+5. Use: `wimg <file>`
+
+**Requirements**: Windows Terminal with sixel support enabled
+
+### For Developers (Build from Source)
+
+See the [Building from Source](#building-from-source) section below.
+
 ## Features
 
 - Display images (JPEG, PNG, GIF, BMP, and more) in your terminal
@@ -11,28 +27,36 @@ A high-performance command-line tool for displaying images, videos, and GIFs dir
 - Automatic terminal size detection and adaptive scaling
 - Graceful Ctrl+C handling with proper cleanup
 - Standalone executable with statically linked dependencies
+- FFmpeg bundled in distribution package (no separate installation needed)
 
 ## Requirements
 
-### Windows
+### For End Users (Pre-built Binary)
 
-1. **Windows Terminal** with sixel support
-   - Download from Microsoft Store or GitHub releases
-   - Enable sixel graphics in settings
+**Windows:**
+- Windows Terminal with sixel support enabled
+- No additional installations needed (FFmpeg is included in the distribution package)
 
-2. **MSYS2** (for building from source)
+**Linux:**
+- Terminal emulator with sixel support (xterm, mlterm, wezterm)
+- FFmpeg installed via package manager
+
+**macOS:**
+- Terminal emulator with sixel support (iTerm2, WezTerm)
+- FFmpeg installed via Homebrew
+
+### For Developers (Building from Source)
+
+**Windows:**
+
+1. **MSYS2** with MINGW64 toolchain
    - Download from https://www.msys2.org/
-   - Install the MINGW64 toolchain
 
-3. **FFmpeg** (for video/GIF support)
-   - Download from https://ffmpeg.org/download.html
-   - Add ffmpeg and ffprobe to your PATH
-
-4. **Rust toolchain**
+2. **Rust toolchain**
    - Install from https://rustup.rs/
-   - Add the GNU target: `rustup target add x86_64-pc-windows-gnu`
+   - Add GNU target: `rustup target add x86_64-pc-windows-gnu`
 
-5. **libsixel** (built from source in MSYS2)
+3. **libsixel** (built from source in MSYS2)
    ```bash
    # In MSYS2 MINGW64 terminal
    pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-pkg-config git autoconf automake libtool make
@@ -44,21 +68,37 @@ A high-performance command-line tool for displaying images, videos, and GIFs dir
    make install
    ```
 
-### Linux
+4. **FFmpeg** (for video/GIF support during development)
+   - Download from https://ffmpeg.org/download.html
+   - Add to PATH
 
-1. **Terminal emulator** with sixel support (e.g., xterm, mlterm, wezterm)
-2. **FFmpeg** (`sudo apt install ffmpeg` or equivalent)
-3. **libsixel** (`sudo apt install libsixel-dev` or build from source)
-4. **Rust toolchain** (from https://rustup.rs/)
+**Linux:**
 
-### macOS
+1. **Terminal emulator** with sixel support (xterm, mlterm, wezterm)
+2. **FFmpeg** and **libsixel** development libraries
+   ```bash
+   sudo apt install ffmpeg libsixel-dev  # Debian/Ubuntu
+   sudo dnf install ffmpeg libsixel-devel  # Fedora
+   ```
+3. **Rust toolchain** from https://rustup.rs/
 
-1. **Terminal emulator** with sixel support (e.g., iTerm2 with sixel enabled, WezTerm)
-2. **FFmpeg** (`brew install ffmpeg`)
-3. **libsixel** (`brew install libsixel`)
-4. **Rust toolchain** (from https://rustup.rs/)
+**macOS:**
+
+1. **Terminal emulator** with sixel support (iTerm2, WezTerm)
+2. **FFmpeg** and **libsixel**
+   ```bash
+   brew install ffmpeg libsixel
+   ```
+3. **Rust toolchain** from https://rustup.rs/
 
 ## Building from Source
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/life2harsh/wimg.git
+cd wimg
+```
 
 ### Windows (MSYS2 MINGW64)
 
@@ -81,28 +121,76 @@ cargo build --release --features sixel
 # The executable will be at: target/release/try_image
 ```
 
+### Create Distribution Package
+
+```powershell
+# Windows only
+cd build_wimg
+.\build-release.ps1 -Version "1.0.0"
+```
+
+This will create `dist/wimg-windows-x64-v1.0.0.zip` with everything bundled.
+
 ## Installation
 
-### Windows
+### Option 1: Pre-built Binary (Windows)
 
-1. Create a directory for binaries (if not exists):
-   ```powershell
-   mkdir C:\bin
-   ```
+**Recommended for most users:**
 
-2. Copy the executable:
-   ```powershell
-   copy target\x86_64-pc-windows-gnu\release\try_image.exe C:\bin\wimg.exe
-   ```
+1. Download the latest release from [GitHub Releases](https://github.com/life2harsh/wimg/releases)
+2. Extract `wimg-windows-x64.zip`
+3. Run one of the installation scripts:
+   - `install-user.bat` - Install for current user (no admin required)
+   - `install.bat` - Install system-wide (requires administrator)
+4. Restart your terminal
+5. Test: `wimg --help`
 
-3. Add `C:\bin` to your PATH environment variable
+The distribution package includes everything you need: wimg.exe, ffmpeg.exe, and ffprobe.exe.
 
-### Linux / macOS
+### Option 2: Build from Source
+
+**For developers or other platforms:**
+
+#### Windows (MSYS2 MINGW64)
+
+```powershell
+# Set environment variables for static linking
+$env:PKG_CONFIG_ALL_STATIC=1
+$env:RUSTFLAGS="-C target-feature=+crt-static"
+
+# Build the release binary
+cargo build --release --target x86_64-pc-windows-gnu --features sixel
+
+# Copy to your preferred location
+copy target\x86_64-pc-windows-gnu\release\try_image.exe C:\bin\wimg.exe
+```
+
+#### Linux / macOS
 
 ```bash
+# Build
+cargo build --release --features sixel
+
+# Install system-wide
 sudo cp target/release/try_image /usr/local/bin/wimg
 sudo chmod +x /usr/local/bin/wimg
+
+# Or install to user directory
+mkdir -p ~/.local/bin
+cp target/release/try_image ~/.local/bin/wimg
+# Add ~/.local/bin to your PATH if not already
 ```
+
+### Option 3: Create Distribution Package (Windows)
+
+To create your own distribution package:
+
+```powershell
+cd build_wimg
+.\build-release.ps1 -Version "1.0.0"
+```
+
+See [BUILD-RELEASE.md](build_wimg/BUILD-RELEASE.md) for detailed instructions.
 
 ## Usage
 
@@ -164,31 +252,45 @@ Press `Ctrl+C` to stop video/GIF playback. The terminal will be properly cleaned
 4. **Sixel graphics** encode the frames for terminal display
 5. Frames are played back with precise timing matching the original FPS
 
+## Distribution
+
+Want to share wimg with others? See the [DISTRIBUTION.md](DISTRIBUTION.md) guide for information on:
+- Creating portable ZIP packages
+- Building Windows installers
+- Publishing to package managers (Chocolatey, Scoop)
+- Creating packages for Linux (AppImage, .deb, .rpm)
+- macOS Homebrew formulas
+
 ## Troubleshooting
 
 ### "ffmpeg failed" error
 
-Make sure FFmpeg is installed and available in your PATH:
+**If using pre-built binary:** The distribution package includes FFmpeg. Make sure you extracted all files from the ZIP.
 
+**If building from source:** Make sure FFmpeg is installed and available in your PATH:
 ```bash
 ffmpeg -version
 ffprobe -version
 ```
 
-### Poor video quality
-
-The tool uses optimized settings for terminal rendering. If you need higher quality, you can modify the source code to increase resolution or change scaling filters.
-
-### Choppy playback
-
-This is often due to terminal rendering limitations. The tool caps at 30 FPS because most terminals cannot render sixel graphics faster than this without stuttering.
-
 ### Terminal not showing anything
 
 Ensure your terminal supports sixel graphics:
-- Windows: Use Windows Terminal with sixel enabled
-- Linux: Use xterm, mlterm, or wezterm
-- macOS: Use iTerm2 (with sixel enabled) or WezTerm
+- **Windows:** Use Windows Terminal (enable sixel in settings under "Rendering")
+- **Linux:** Use xterm, mlterm, or wezterm
+- **macOS:** Use iTerm2 (enable sixel in preferences) or WezTerm
+
+### Poor video quality or choppy playback
+
+The tool uses optimized settings for terminal rendering with a balance between quality and performance. Terminal rendering limitations cap playback at 30 FPS. This is normal for sixel graphics in most terminals.
+
+### Installation script doesn't work
+
+**Windows:** Make sure you're running the correct script:
+- `install-user.bat` - For current user only (recommended)
+- `install.bat` - For all users (right-click → Run as administrator)
+
+After installation, restart your terminal for PATH changes to take effect.
 
 ## Development
 
@@ -196,19 +298,25 @@ Ensure your terminal supports sixel graphics:
 
 ```
 .
-├── Cargo.toml          # Project dependencies
+├── Cargo.toml                  # Project dependencies
 ├── src/
-│   └── main.rs         # Main application code
-└── target/             # Build output
+│   └── main.rs                 # Main application code
+├── build_wimg/
+│   ├── BUILD-RELEASE.md        # Distribution build guide
+│   ├── build-release.ps1       # Automated build script
+│   ├── install-user.bat        # User installation script
+│   └── install.bat             # System installation script
+├── DISTRIBUTION.md             # Distribution guide
+└── target/                     # Build output
 ```
 
 ### Dependencies
 
-- `image` - Image loading and processing
-- `sixel-rs` - Sixel graphics encoding (optional feature)
-- `tempfile` - Temporary directory management for frame extraction
-- `terminal_size` - Dynamic terminal dimension detection
-- `ctrlc` - Signal handling for graceful shutdown
+- `image` (0.24) - Image loading and processing
+- `sixel-rs` (0.5.0) - Sixel graphics encoding (optional feature)
+- `tempfile` (3.8) - Temporary directory management for frame extraction
+- `terminal_size` (0.3) - Dynamic terminal dimension detection
+- `ctrlc` (3.4) - Signal handling for graceful shutdown
 
 ### Building without sixel-rs
 
@@ -218,13 +326,22 @@ If you want to use the pure Rust fallback encoder:
 cargo build --release --no-default-features
 ```
 
+### Contributing
+
+Contributions are welcome! Please feel free to:
+- Report bugs via GitHub Issues
+- Submit pull requests
+- Suggest new features
+- Improve documentation
+
+Before submitting a PR:
+1. Ensure code builds without warnings
+2. Test on your platform
+3. Update documentation if needed
+
 ## License
 
 This project is open source. See LICENSE file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Acknowledgments
 
@@ -232,3 +349,11 @@ Contributions are welcome! Please feel free to submit issues or pull requests.
 - Uses libsixel for high-quality sixel encoding
 - FFmpeg for video processing
 - Thanks to the terminal emulator developers who support sixel graphics
+
+## Links
+
+- **Repository:** https://github.com/life2harsh/wimg
+- **Releases:** https://github.com/life2harsh/wimg/releases
+- **Issues:** https://github.com/life2harsh/wimg/issues
+- **Distribution Guide:** [DISTRIBUTION.md](DISTRIBUTION.md)
+- **Build Guide:** [BUILD-RELEASE.md](build_wimg/BUILD-RELEASE.md)
