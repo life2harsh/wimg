@@ -4,33 +4,194 @@ use sixel_rs::encoder::{Encoder, QuickFrameBuilder};
 use sixel_rs::pixelformat::PixelFormat;
 use image::{DynamicImage, GenericImageView};
 use std::env;
+use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
+use std::process::Command;
+use std::thread;
+use std::time::{Duration, Instant};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tempfile::TempDir;
+use terminal_size::{Width, Height, terminal_size};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     
     if args.len() < 2 {
-        eprintln!("Usage: {} <image_path>", args[0]);
-        eprintln!("Example: {} photo.jpg", args[0]);
+        eprintln!("Usage: {} <image_or_video_path>", args[0]);
         display_test_pattern()?;
         return Ok(());
     }
     
-    let image_path = &args[1];
+    let file_path = &args[1];
     
-    if !Path::new(image_path).exists() {
-        eprintln!("Error: File '{}' not found", image_path);
+    if !Path::new(file_path).exists() {
+        eprintln!("Error: File '{}' not found", file_path);
         std::process::exit(1);
     }
     
-    display_image(image_path)?;
+    let ext = Path::new(file_path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    
+    if matches!(ext.as_str(), "mp4" | "avi" | "mov" | "mkv" | "webm" | "flv" | "wmv" | "gif") {
+        display_video(file_path)?;
+    } else {
+        display_image(file_path)?;
+    }
+    
+    Ok(())
+}
+
+fn get_terminal_dimensions() -> (u32, u32) {
+    terminal_size()
+        .map(|(Width(w), Height(h))| {
+            (w.saturating_sub(1) as u32, h.saturating_sub(1) as u32)
+        })
+        .unwrap_or((120, 40))
+}
+
+fn detect_video_fps(path: &str) -> Option<f64> {
+    let output = Command::new("ffprobe")
+        .args(&[
+            "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=r_frame_rate",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            path
+        ])
+        .output()
+        .ok()?;
+    
+    if !output.status.success() {
+        return None;
+    }
+    
+    let fps_str = String::from_utf8(output.stdout).ok()?;
+    let fps_str = fps_str.trim();
+    
+    if let Some((num, den)) = fps_str.split_once('/') {
+        let numerator: f64 = num.parse().ok()?;
+        let denominator: f64 = den.parse().ok()?;
+        Some(numerator / denominator)
+    } else {
+        fps_str.parse().ok()
+    }
+}
+
+fn display_video(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
+    let frame_pattern = temp_dir.path().join("frame_%04d.png");
+    
+    let is_gif = path.to_lowercase().ends_with(".gif");
+    
+    let original_fps = if is_gif {
+        30.0
+    } else {
+        detect_video_fps(path).unwrap_or(30.0)
+    };
+    
+    let fps = original_fps.min(30.0);
+    
+    let fps_filter = format!(
+        "fps={},scale=1280:-1:flags=fast_bilinear",
+        fps
+    );
+    
+    let output = Command::new("ffmpeg")
+        .args(&[
+            "-i", path,
+            "-vf", &fps_filter,
+            "-q:v", "2",
+            "-pix_fmt", "rgb24",
+            "-f", "image2",
+            frame_pattern.to_str().unwrap()
+        ])
+        .output()?;
+    
+    if !output.status.success() {
+        return Err("ffmpeg failed. Make sure ffmpeg is installed and in PATH.".into());
+    }
+    
+    let mut frame_files: Vec<_> = fs::read_dir(temp_dir.path())?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|s| s.to_str()) == Some("png"))
+        .collect();
+    
+    frame_files.sort();
+    
+    if frame_files.is_empty() {
+        return Err("No frames extracted from video".into());
+    }
+    
+    let (cols, rows) = get_terminal_dimensions();
+    
+    let frame_delay = Duration::from_millis(33);
+    
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+    
+    print!("\x1b[2J\x1b[H\x1b[?25l");
+    io::stdout().flush()?;
+    
+    for frame_path in frame_files {
+        if !running.load(Ordering::SeqCst) {
+            break;
+        }
+        
+        let start = Instant::now();
+        
+        if let Ok(img) = image::open(&frame_path) {
+            let resized = resize_for_terminal(img, cols, rows);
+            let rgb = resized.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            
+            print!("\x1b[H");
+            
+            #[cfg(feature = "sixel")]
+            {
+                if let Ok(enc) = Encoder::new() {
+                    let frame_data = QuickFrameBuilder::new()
+                        .width(w as usize)
+                        .height(h as usize)
+                        .format(PixelFormat::RGB888)
+                        .pixels(rgb.as_raw().to_vec());
+                    let _ = enc.encode_bytes(frame_data);
+                    io::stdout().flush()?;
+                }
+            }
+            
+            #[cfg(not(feature = "sixel"))]
+            {
+                let sixel = encode_sixel(rgb.as_raw(), w as usize, h as usize, 256);
+                print!("\x1bPq{sixel}\x1b\\");
+                io::stdout().flush()?;
+            }
+        }
+        
+        let elapsed = start.elapsed();
+        if elapsed < frame_delay {
+            thread::sleep(frame_delay - elapsed);
+        }
+    }
+    
+    print!("\x1b[2J\x1b[H\x1b[?25h");
+    println!("Video playback finished.");
     Ok(())
 }
 
 fn display_image(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let (cols, rows) = get_terminal_dimensions();
+    
     let img = image::open(path)?;
-    let img = resize_for_terminal(img, 100, 40);
+    let img = resize_for_terminal(img, cols, rows);
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
     #[cfg(feature = "sixel")]
@@ -55,7 +216,6 @@ fn display_image(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn display_test_pattern() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Displaying test pattern...");
     let w = 120usize;
     let h = 60usize;
     let mut px = Vec::with_capacity(w * h * 3);
@@ -174,20 +334,24 @@ fn nearest(palette: &[(u8,u8,u8)], c: (u8,u8,u8)) -> u8 {
 
 fn resize_for_terminal(img: DynamicImage, max_cols: u32, max_rows: u32) -> DynamicImage {
     let (w, h) = img.dimensions();
-    let char_aspect = 0.5f32;
-    let max_w = (max_cols * 8) as f32;
-    let max_h = max_rows as f32 * 16.0 * char_aspect;
-    let mut nw = w as f32;
-    let mut nh = h as f32;
-    if nw > max_w {
-        let s = max_w / nw;
-        nw *= s;
-        nh *= s;
-    }
-    if nh > max_h {
-        let s = max_h / nh;
-        nw *= s;
-        nh *= s;
-    }
-    img.resize(nw.max(1.0).round() as u32, nh.max(1.0).round() as u32, image::imageops::FilterType::Lanczos3)
+    let img_aspect = w as f32 / h as f32;
+    
+    let max_w = (max_cols * 10) as f32;
+    let max_h = (max_rows * 10) as f32;
+    
+    let (new_w, new_h) = if max_w / max_h > img_aspect {
+        let new_h = max_h;
+        let new_w = new_h * img_aspect;
+        (new_w, new_h)
+    } else {
+        let new_w = max_w;
+        let new_h = new_w / img_aspect;
+        (new_w, new_h)
+    };
+    
+    img.resize(
+        new_w.max(1.0).round() as u32,
+        new_h.max(1.0).round() as u32,
+        image::imageops::FilterType::Triangle
+    )
 }
