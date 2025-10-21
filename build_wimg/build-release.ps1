@@ -28,6 +28,21 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Copying binary..." -ForegroundColor Yellow
 Copy-Item "target\x86_64-pc-windows-gnu\release\try_image.exe" "dist\wimg-windows-x64\wimg.exe"
 
+# Copy libsixel-1.dll
+Write-Host "Copying libsixel-1.dll..." -ForegroundColor Yellow
+if (Test-Path "C:\msys64\mingw64\bin\libsixel-1.dll") {
+    Copy-Item "C:\msys64\mingw64\bin\libsixel-1.dll" "dist\wimg-windows-x64\libsixel-1.dll"
+} else {
+    Write-Host "Warning: libsixel-1.dll not found at C:\msys64\mingw64\bin\" -ForegroundColor Yellow
+    Write-Host "Looking for libsixel-1.dll in current directory..." -ForegroundColor Yellow
+    if (Test-Path "libsixel-1.dll") {
+        Copy-Item "libsixel-1.dll" "dist\wimg-windows-x64\libsixel-1.dll"
+    } else {
+        Write-Host "Error: libsixel-1.dll not found! wimg will not work without it." -ForegroundColor Red
+        exit 1
+    }
+}
+
 # Copy installation scripts
 Write-Host "Copying installation scripts..." -ForegroundColor Yellow
 Copy-Item "install-user.bat" "dist\wimg-windows-x64\"

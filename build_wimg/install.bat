@@ -34,6 +34,15 @@ REM Copy wimg.exe
 echo Copying wimg.exe to %INSTALL_DIR%...
 copy /Y "%SCRIPT_DIR%wimg.exe" "%INSTALL_DIR%\"
 
+REM Copy libsixel-1.dll if present
+if exist "%SCRIPT_DIR%libsixel-1.dll" (
+    echo Copying libsixel-1.dll...
+    copy /Y "%SCRIPT_DIR%libsixel-1.dll" "%INSTALL_DIR%\"
+) else (
+    echo Warning: libsixel-1.dll not found in package
+    echo wimg may not work properly without this file
+)
+
 REM Check if ffmpeg.exe and ffprobe.exe exist in current directory
 if exist "%SCRIPT_DIR%ffmpeg.exe" (
     echo Found ffmpeg.exe, copying...
