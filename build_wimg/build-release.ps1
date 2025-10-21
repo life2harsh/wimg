@@ -28,18 +28,25 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "Copying binary..." -ForegroundColor Yellow
 Copy-Item "target\x86_64-pc-windows-gnu\release\try_image.exe" "dist\wimg-windows-x64\wimg.exe"
 
-# Copy libsixel-1.dll
-Write-Host "Copying libsixel-1.dll..." -ForegroundColor Yellow
-if (Test-Path "C:\msys64\mingw64\bin\libsixel-1.dll") {
-    Copy-Item "C:\msys64\mingw64\bin\libsixel-1.dll" "dist\wimg-windows-x64\libsixel-1.dll"
-} else {
-    Write-Host "Warning: libsixel-1.dll not found at C:\msys64\mingw64\bin\" -ForegroundColor Yellow
-    Write-Host "Looking for libsixel-1.dll in current directory..." -ForegroundColor Yellow
-    if (Test-Path "libsixel-1.dll") {
-        Copy-Item "libsixel-1.dll" "dist\wimg-windows-x64\libsixel-1.dll"
+# Copy required DLLs
+Write-Host "Copying required DLL files..." -ForegroundColor Yellow
+$requiredDlls = @('libsixel-1.dll', 'libgcc_s_seh-1.dll', 'libwinpthread-1.dll', 'libjpeg-8.dll', 'libpng16-16.dll', 'zlib1.dll')
+$dllSource = "C:\msys64\mingw64\bin"
+
+foreach ($dll in $requiredDlls) {
+    $sourcePath = Join-Path $dllSource $dll
+    if (Test-Path $sourcePath) {
+        Copy-Item $sourcePath "dist\wimg-windows-x64\$dll"
+        Write-Host "  Copied $dll" -ForegroundColor Gray
     } else {
-        Write-Host "Error: libsixel-1.dll not found! wimg will not work without it." -ForegroundColor Red
-        exit 1
+        Write-Host "  Warning: $dll not found at $sourcePath" -ForegroundColor Yellow
+        # Try current directory
+        if (Test-Path $dll) {
+            Copy-Item $dll "dist\wimg-windows-x64\$dll"
+            Write-Host "  Copied $dll from current directory" -ForegroundColor Gray
+        } else {
+            Write-Host "  Error: $dll not found! wimg may not work without it." -ForegroundColor Red
+        }
     }
 }
 
