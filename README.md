@@ -6,7 +6,7 @@ A high-performance command-line tool for displaying images, videos, and GIFs dir
 
 ### For Windows Users (Pre-built Binary)
 
-1. Download the latest release: [wimg-windows-x64.zip](https://github.com/life2harsh/wimg/releases)
+1. Download the latest release: [build_wimg.zip](https://github.com/life2harsh/wimg/releases)
 2. Extract the ZIP file
 3. Run `install-user.bat` (or `install.bat` as administrator)
 4. Restart your terminal
