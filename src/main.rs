@@ -6,14 +6,42 @@ use image::{DynamicImage, GenericImageView};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tempfile::TempDir;
-use terminal_size::{Width, Height, terminal_size};
+use terminal_size::{Width   , Height, terminal_size};
+
+fn get_exe_dir() -> Option<PathBuf> {
+    env::current_exe().ok()?.parent().map(|p| p.to_path_buf())
+}
+
+fn find_ffmpeg() -> String {
+    if let Some(exe_dir) = get_exe_dir() {
+        let local_ffmpeg = exe_dir.join("ffmpeg.exe");
+        if local_ffmpeg.exists() {
+            if let Some(path_str) = local_ffmpeg.to_str() {
+                return path_str.to_string();
+            }
+        }
+    }
+    "ffmpeg".to_string()
+}
+
+fn find_ffprobe() -> String {
+    if let Some(exe_dir) = get_exe_dir() {
+        let local_ffprobe = exe_dir.join("ffprobe.exe");
+        if local_ffprobe.exists() {
+            if let Some(path_str) = local_ffprobe.to_str() {
+                return path_str.to_string();
+            }
+        }
+    }
+    "ffprobe".to_string()
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -55,7 +83,8 @@ fn get_terminal_dimensions() -> (u32, u32) {
 }
 
 fn detect_video_fps(path: &str) -> Option<f64> {
-    let output = Command::new("ffprobe")
+    let ffprobe_cmd = find_ffprobe();
+    let output = Command::new(ffprobe_cmd)
         .args(&[
             "-v", "error",
             "-select_streams", "v:0",
@@ -101,7 +130,8 @@ fn display_video(path: &str) -> Result<(), Box<dyn std::error::Error>> {
         fps
     );
     
-    let output = Command::new("ffmpeg")
+    let ffmpeg_cmd = find_ffmpeg();
+    let output = Command::new(ffmpeg_cmd)
         .args(&[
             "-i", path,
             "-vf", &fps_filter,
