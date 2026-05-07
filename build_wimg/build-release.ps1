@@ -15,9 +15,25 @@ New-Item -ItemType Directory -Force -Path "dist\wimg-windows-x64" | Out-Null
 
 # Build binary
 Write-Host "`nBuilding binary..." -ForegroundColor Yellow
-$env:PKG_CONFIG_ALL_STATIC=1
-$env:RUSTFLAGS="-C target-feature=+crt-static"
-cargo build --release --target x86_64-pc-windows-gnu --features sixel
+$bash = "C:\msys64\usr\bin\bash.exe"
+if (-not (Test-Path $bash)) {
+    throw "MSYS bash was not found at $bash"
+}
+
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$drive = $repoRoot.Substring(0, 1).ToLower()
+$rest = $repoRoot.Substring(2) -replace "\\", "/"
+$msysRepo = "/$drive$rest"
+$buildCmd = @"
+export PATH=/c/Users/jhaha/.cargo/bin:/mingw64/bin:/usr/bin:`$PATH
+export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER=gcc
+export RUSTFLAGS='-C link-arg=-lwinpthread -C link-arg=-lmsvcrt'
+cd '$msysRepo'
+cargo clean
+cargo build --release -j1
+"@
+
+& $bash -lc $buildCmd
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Build failed!" -ForegroundColor Red
@@ -26,7 +42,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Copy binary
 Write-Host "Copying binary..." -ForegroundColor Yellow
-Copy-Item "target\x86_64-pc-windows-gnu\release\try_image.exe" "dist\wimg-windows-x64\wimg.exe"
+Copy-Item "target\release\try_image.exe" "dist\wimg-windows-x64\wimg.exe"
 
 # Copy required DLLs
 Write-Host "Copying required DLL files..." -ForegroundColor Yellow
